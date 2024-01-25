@@ -24,10 +24,12 @@ def traverse_nodes(node: MCTSNode, board: Board, state, bot_identity: int):
 
     """
     while not board.is_ended(state):
-        if not node.untried_actions:
-            node, state = expand_leaf(node, board, state)
+        if node.untried_actions:
+            return expand_leaf(node, board, state)
         else:
-            return node, state
+            best_action = max(node.child_nodes, key=lambda a: ucb(node.child_nodes[a], node.child_nodes[a].parent_action != bot_identity))
+            node = node.child_nodes[best_action]
+            state = board.next_state(state, best_action)
     return node, state
 
 def expand_leaf(node: MCTSNode, board: Board, state):
@@ -126,23 +128,22 @@ def think(board: Board, current_state):
     Returns:    The action to be taken from the current state
 
     """
-    bot_identity = board.current_player(current_state)  # 1 or 2
+    bot_identity = board.current_player(current_state)
     root_node = MCTSNode(parent=None, parent_action=None, action_list=board.legal_actions(current_state))
 
     for _ in range(num_nodes):
         state = current_state
         node = root_node
 
-        # Do MCTS
         node, state = traverse_nodes(node, board, state, bot_identity)
         if node.untried_actions:
             node, state = expand_leaf(node, board, state)
-        won = is_win(board, state, bot_identity)
-        backpropagate(node, won)
+        
+        # Check if the state is a terminal state before calling is_win
+        if board.is_ended(state):
+            won = is_win(board, state, bot_identity)
+            backpropagate(node, won)
 
-    # Return an action, typically the most frequently used action (from the root) or the action with the best
-    # estimated win rate.
     best_action = get_best_action(root_node)
-
     print(f"Action chosen: {best_action}")
     return best_action
