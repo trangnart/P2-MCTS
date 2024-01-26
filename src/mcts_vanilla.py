@@ -1,4 +1,3 @@
-
 from mcts_node import MCTSNode
 from p2_t3 import Board
 from random import choice
@@ -23,13 +22,14 @@ def traverse_nodes(node: MCTSNode, board: Board, state, bot_identity: int):
         state: The state associated with that node
 
     """
-    while not board.is_ended(state):
-        if node.untried_actions:
-            return expand_leaf(node, board, state)
-        else:
-            best_action = max(node.child_nodes, key=lambda a: ucb(node.child_nodes[a], node.child_nodes[a].parent_action != bot_identity))
-            node = node.child_nodes[best_action]
-            state = board.next_state(state, best_action)
+    while node.child_nodes and not node.untried_actions and not board.is_ended(state):
+        is_opponent = board.current_player(state) != bot_identity
+
+        best_node = max(node.child_nodes.values(), key=lambda x: ucb(x, is_opponent))
+        node = best_node
+
+        state = board.next_state(state, node.parent_action)
+
     return node, state
 
 def expand_leaf(node: MCTSNode, board: Board, state):
@@ -45,12 +45,13 @@ def expand_leaf(node: MCTSNode, board: Board, state):
         state: The state associated with that node
 
     """
-    action = node.untried_actions.pop()
-    new_state = board.next_state(state, action)
-    new_node = MCTSNode(parent=node, parent_action=action, action_list=board.legal_actions(new_state))
-    node.child_nodes[action] = new_node
-    return new_node, new_state
+    if len(node.untried_actions) > 0:
+        action = node.untried_actions.pop(0)
+        state = board.next_state(state, action)
+        n = MCTSNode(parent=node,parent_action=action, action_list=board.legal_actions(state))
+        node.child_nodes[action] = n
 
+    return node, state
 
 def rollout(board: Board, state):
     """ Given the state of the game, the rollout plays out the remainder randomly.
@@ -64,11 +65,10 @@ def rollout(board: Board, state):
 
     """
     while not board.is_ended(state):
-        legal_actions = board.legal_actions(state)
-        action = choice(legal_actions)
-        state = board.next_state(state, action)
-    return state
+        legal_action = choice(board.legal_actions(state))
+        state = board.next_state(state, legal_action)
 
+    return state
 
 def backpropagate(node: MCTSNode|None, won: bool):
     """ Navigates the tree from a leaf node to the root, updating the win and visit count of each node along the path.
@@ -78,11 +78,12 @@ def backpropagate(node: MCTSNode|None, won: bool):
         won:    An indicator of whether the bot won or lost the game.
 
     """
-    while node is not None:
-        node.visits += 1
-        if won:
-            node.wins += 1
-        node = node.parent
+    if won:
+        node.wins += 1
+    node.visits += 1
+
+    if node.parent is not None:
+        backpropagate(node.parent, won)
 
 def ucb(node: MCTSNode, is_opponent: bool):
     """ Calcualtes the UCB value for the given node from the perspective of the bot
@@ -108,9 +109,13 @@ def get_best_action(root_node: MCTSNode):
         action: The best action from the root node
 
     """
-    best_action = max(root_node.child_nodes.keys(), key=lambda action: ucb(root_node.child_nodes[action], False))
-    return best_action
+    valid_child_nodes = filter(lambda x: x[1].visits > 0, root_node.child_nodes.items())
 
+    if not valid_child_nodes:
+        return None
+
+    best_action, best_win = max(valid_child_nodes, key=lambda x: x[1].wins / x[1].visits)
+    return best_action
 
 def is_win(board: Board, state, identity_of_bot: int):
     # checks if state is a win state for identity_of_bot
@@ -128,21 +133,21 @@ def think(board: Board, current_state):
     Returns:    The action to be taken from the current state
 
     """
-    bot_identity = board.current_player(current_state)
+    bot_identity = board.current_player(current_state) # 1 or 2
     root_node = MCTSNode(parent=None, parent_action=None, action_list=board.legal_actions(current_state))
 
     for _ in range(num_nodes):
         state = current_state
         node = root_node
 
-        node, state = traverse_nodes(node, board, state, bot_identity)
-        if node.untried_actions:
-            node, state = expand_leaf(node, board, state)
-        
-        # Check if the state is a terminal state before calling is_win
-        if board.is_ended(state):
-            won = is_win(board, state, bot_identity)
-            backpropagate(node, won)
+        leaf_node, state = traverse_nodes(node, board, state, bot_identity)
+
+        expand_node, state = expand_leaf(leaf_node, board, state)
+
+        state = rollout(board, state)
+
+        won = is_win(board, state, bot_identity)
+        backpropagate(expand_node, won)
 
     best_action = get_best_action(root_node)
     print(f"Action chosen: {best_action}")
