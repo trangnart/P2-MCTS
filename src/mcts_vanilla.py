@@ -48,8 +48,8 @@ def expand_leaf(node: MCTSNode, board: Board, state):
     if len(node.untried_actions) > 0:
         action = node.untried_actions.pop(0)
         state = board.next_state(state, action)
-        n = MCTSNode(parent=node,parent_action=action, action_list=board.legal_actions(state))
-        node.child_nodes[action] = n
+        new_node = MCTSNode(parent=node,parent_action=action, action_list=board.legal_actions(state))
+        node.child_nodes[action] = new_node
 
     return node, state
 
