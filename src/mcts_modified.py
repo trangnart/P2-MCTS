@@ -53,7 +53,7 @@ def expand_leaf(node: MCTSNode, board: Board, state):
 
     return node, state
 
-def rollout(board: Board, state):
+def heuristic_rollout(board: Board, state):
     """ Given the state of the game, the rollout plays out the remainder randomly.
 
     Args:
@@ -144,7 +144,7 @@ def think(board: Board, current_state):
 
         expand_node, state = expand_leaf(leaf_node, board, state)
 
-        state = rollout(board, state)
+        state = heuristic_rollout(board, state)
 
         won = is_win(board, state, bot_identity)
         backpropagate(expand_node, won)
